@@ -29,20 +29,9 @@ import cv2
 import threading
 import math
 import time
-import pigpio
 
 GPIOS = 32
 MODES = ["INPUT", "OUTPUT", "ALT5", "ALT4", "ALT0", "ALT1", "ALT2", "ALT3"]
-
-pi = pigpio.pi()
-
-#pin for Powerswitch (Lumos,Nox)
-switch_pin = 16
-pi.set_mode(switch_pin,pigpio.OUTPUT)
-
-#pin for Trinket (Colovario)
-trinket_pin = 12
-pi.set_mode(trinket_pin,pigpio.OUTPUT)
 
 # Parameters for image processing
 lk_params = dict( winSize  = (15,15),
@@ -50,8 +39,6 @@ lk_params = dict( winSize  = (15,15),
                 criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 dilation_params = (5, 5)
 movment_threshold = 80
-
-Scan()
 
 # Scan starts camera input and runs FindNewPoints
 def Scan():
@@ -62,13 +49,13 @@ def Scan():
     cam.framerate = 24
     try:
         while True:
-            FindNewPoints()
+            FindNewPoints(cam, stream)
     except KeyboardInterrupt:
-        End()
+        End(cam)
         exit
 
 #FindWand is called to find all potential wands in a scene.  These are then tracked as points for movement.  The scene is reset every 3 seconds.
-def FindNewPoints():
+def FindNewPoints(cam, stream):
     global old_frame,old_gray,p0,mask,color,ig,img,frame
     try:
         try:
@@ -91,16 +78,16 @@ def FindNewPoints():
         mask = np.zeros_like(old_frame)
         ig = [[0] for x in range(20)]
         print("finding...")
-        TrackWand()
+        TrackWand(cam, stream)
 	    #This resets the scene every three seconds
         threading.Timer(3, FindNewPoints).start()
     except:
         e = sys.exc_info()[1]
         print("FindWand Error: %s" % e )
-        End()
+        End(cam)
         exit
 
-def TrackWand():
+def TrackWand(cam, stream):
     global old_frame,old_gray,p0,mask,color,ig,img,frame
     color = (0,0,255)
     try:
@@ -218,6 +205,8 @@ def IsGesture(a,b,c,d,i):
         Spell("Colovaria")
     print(astr)
 
-def End():
+def End(cam):
 	cam.close()
 	cv2.destroyAllWindows()
+
+Scan()

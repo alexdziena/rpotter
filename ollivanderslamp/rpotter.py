@@ -56,7 +56,7 @@ pi.set_mode(incendio_pin,pigpio.OUTPUT)
 trinket_pin = 12
 pi.set_mode(trinket_pin,pigpio.OUTPUT)
 
-print "Initializing point tracking"
+print("Initializing point tracking")
 
 # Parameters
 lk_params = dict( winSize  = (15,15),
@@ -66,7 +66,7 @@ blur_params = (4,4)
 dilation_params = (5, 5)
 movment_threshold = 80
 
-print "START switch_pin ON for pre-video test"
+print("START switch_pin ON for pre-video test")
 pi.write(nox_pin,0)
 pi.write(incendio_pin,0)
 pi.write(switch_pin,1)
@@ -84,17 +84,17 @@ def Spell(spell):
     #Invoke IoT (or any other) actions here
     cv2.putText(mask, spell, (5, 25),cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255,0,0))
     if (spell=="Colovaria"):
-	print "trinket_pin trigger"
-	pi.write(trinket_pin,0)
-	time.sleep(1)
-	pi.write(trinket_pin,1)
+        print("trinket_pin trigger")
+        pi.write(trinket_pin,0)
+        time.sleep(1)
+        pi.write(trinket_pin,1)
     elif (spell=="Incendio"):
-	print "switch_pin OFF"
-	pi.write(switch_pin,0)
-	print "nox_pin OFF"
-	pi.write(nox_pin,0)
-	print "incendio_pin ON"
-	pi.write(incendio_pin,1)
+        print("switch_pin OFF")
+        pi.write(switch_pin,0)
+        print("nox_pin OFF")
+        pi.write(nox_pin,0)
+        print("incendio_pin ON")
+        pi.write(incendio_pin,1)
     elif (spell=="Lumos"):
 	# print "switch_pin ON"
 	# pi.write(switch_pin,1)
@@ -102,19 +102,19 @@ def Spell(spell):
 	# pi.write(nox_pin,0)
 	# print "incendio_pin OFF"
 	# pi.write(incendio_pin,0)
-    tplink.test()
+        tplink.test()
     elif (spell=="Nox"):
-	print "switch_pin OFF"
-	pi.write(switch_pin,0)
-	print "nox_pin ON"
-	pi.write(nox_pin,1)
-	print "incendio_pin OFF"
-	pi.write(incendio_pin,0)	
-    print "CAST: %s" %spell
+        print("switch_pin OFF")
+        pi.write(switch_pin,0)
+        print("nox_pin ON")
+        pi.write(nox_pin,1)
+        print("incendio_pin OFF")
+        pi.write(incendio_pin,0)        
+    print("CAST: {}".format(spell))
     
 
 def IsGesture(a,b,c,d,i):
-    print "point: %s" % i
+    print("point: {}".format(i))
     #look for basic movements - TODO: trained gestures
     if ((a<(c-5))&(abs(b-d)<2)):
         ig[i].append("left")
@@ -134,32 +134,32 @@ def IsGesture(a,b,c,d,i):
         Spell("Colovaria")
     elif "leftup" in astr:
         Spell("Incendio")    
-    print astr
+    print(astr)
     
 def FindWand():
     global rval,old_frame,old_gray,p0,mask,color,ig,img,frame
     try:
         rval, old_frame = cam.read()
-	cv2.flip(old_frame,1,old_frame)
+        cv2.flip(old_frame,1,old_frame)
         old_gray = cv2.cvtColor(old_frame,cv2.COLOR_BGR2GRAY)
         equalizeHist(old_gray)
-	old_gray = GaussianBlur(old_gray,(9,9),1.5)
+        old_gray = GaussianBlur(old_gray,(9,9),1.5)
         dilate_kernel = np.ones(dilation_params, np.uint8)
         old_gray = cv2.dilate(old_gray, dilate_kernel, iterations=1)
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
         old_gray = clahe.apply(old_gray)
         #TODO: trained image recognition
         p0 = cv2.HoughCircles(old_gray,cv2.HOUGH_GRADIENT,3,50,param1=240,param2=8,minRadius=4,maxRadius=15)
-	if p0 is not None:
+        if p0 is not None:
             p0.shape = (p0.shape[1], 1, p0.shape[2])
             p0 = p0[:,:,0:2] 
             mask = np.zeros_like(old_frame)
             ig = [[0] for x in range(20)]
-        print "finding..."
+        print("finding...")
         threading.Timer(3, FindWand).start()
     except:
         e = sys.exc_info()[1]
-        print "Error: %s" % e 
+        print("Error: {}".format(e))
         exit
         
 def TrackWand():
@@ -183,14 +183,14 @@ def TrackWand():
                     p0 = p0[:,:,0:2]
                     mask = np.zeros_like(old_frame)
         except:
-            	print "No points found"         
-	# Create a mask image for drawing purposes
+                print("No points found")         
+        # Create a mask image for drawing purposes
         
-	while True:
+        while True:
                 try: 
                         rval, frame = cam.read()
                         cv2.flip(frame,1,frame)
-			if p0 is not None:
+                        if p0 is not None:
                             frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                             equalizeHist(frame_gray)
                             frame_gray = GaussianBlur(frame_gray,(9,9),1.5)
@@ -231,19 +231,19 @@ def TrackWand():
                         old_gray = frame_gray.copy()
                         p0 = good_new.reshape(-1,1,2)
                 except IndexError:
-            		print "Index error - Tracking"  
-        	except:
-            		e = sys.exc_info()[0]
-            		print "Tracking Error: %s" % e 
-        	key = cv2.waitKey(20)
-        	if key in [27, ord('Q'), ord('q')]: # exit on ESC
+                            print("Index error - Tracking")  
+                except:
+                            e = sys.exc_info()[0]
+                            print("Tracking Error: {}".format(e)) 
+                key = cv2.waitKey(20)
+                if key in [27, ord('Q'), ord('q')]: # exit on ESC
                         cv2.destroyAllWindows()
                         cam.release()  
-            		break           
+                        break           
 
 try:
     FindWand()
-    print "START incendio_pin ON and set switch off if video is running"
+    print("START incendio_pin ON and set switch off if video is running")
     pi.write(incendio_pin,1)
     pi.write(switch_pin,0)      
     TrackWand()  
