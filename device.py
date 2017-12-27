@@ -1,6 +1,7 @@
 import requests
 import json
 import yaml
+import logging
 from abc import ABCMeta, abstractmethod
 from config import _CONFIG_FILE
 
@@ -70,7 +71,7 @@ class Device:
         try:
             return self.session.post(url=self.endpoint, json=data).json()
         except Exception as e:
-            print e
+            logging.error(e)
             raise e
 
     @abstractmethod

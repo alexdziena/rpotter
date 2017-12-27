@@ -78,7 +78,7 @@ class TPLink(object):
                 self.devicesByAlias[device['alias']] = device
             return resp
         except Exception as e:
-            print e
+            logging.error(e)
             raise e
 
     def getDeviceByAlias(self, alias):
@@ -105,7 +105,7 @@ def test():
         logging.info(bulb.on())
         logging.info(bulb.color())
         logging.info(bulb.saturation(100))
-        for hue in xrange(361):
+        for hue in range(361):
             logging.info(bulb.hue(hue))
             time.sleep(20/1000.0)
         logging.info(bulb.white())
