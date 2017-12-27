@@ -88,6 +88,24 @@ class TPLink(object):
         return self.devicesById[deviceId]
 
 
+def allOff():
+    l = TPLink()
+    logging.info(l.login('alexdziena@gmail.com','bg0*ls6C)ny1'))
+    factory = DeviceFactory(l.endpoint)
+    for device in l.getDeviceList()['result']['deviceList']:
+        device = factory.buildDevice(device).token
+        device.token = l.token
+        device.off()
+
+def allOn():
+    l = TPLink()
+    logging.info(l.login('alexdziena@gmail.com','bg0*ls6C)ny1'))
+    factory = DeviceFactory(l.endpoint)
+    for device in l.getDeviceList()['result']['deviceList']:
+        device = factory.buildDevice(device).token
+        device.token = l.token
+        device.on()
+
 def test():
     l = TPLink()
     logging.info(l.login('alexdziena@gmail.com','bg0*ls6C)ny1'))

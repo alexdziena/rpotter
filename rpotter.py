@@ -30,6 +30,10 @@ import time
 import pigpio
 import warnings
 import tplink
+import Queue
+from device import DeviceFactory, Bulb
+from collections import defaultdict
+import logging
 
 warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
@@ -56,7 +60,7 @@ pi.set_mode(incendio_pin,pigpio.OUTPUT)
 trinket_pin = 12
 pi.set_mode(trinket_pin,pigpio.OUTPUT)
 
-print("Initializing point tracking")
+logging.info("Initializing point tracking")
 
 # Parameters
 lk_params = dict( winSize  = (15,15),
@@ -66,7 +70,7 @@ blur_params = (4,4)
 dilation_params = (5, 5)
 movment_threshold = 80
 
-print("START switch_pin ON for pre-video test")
+logging.info("START switch_pin ON for pre-video test")
 pi.write(nox_pin,0)
 pi.write(incendio_pin,0)
 pi.write(switch_pin,1)
@@ -78,27 +82,97 @@ cam.set(3, 640)
 cam.set(4, 480)
 
 class TPLinkWorker(threading.Thread):
-    def run (self):
-        tplink.test()
+    """ A worker thread that takes directory names from a queue, finds all
+        files in them recursively and reports the result.
 
+        Input is done by placing directory names (as strings) into the
+        Queue passed in dir_q.
 
+        Output is done by placing tuples into the Queue passed in result_q.
+        Each tuple is (thread name, dirname, [list of files]).
+
+        Ask the thread to stop by calling its join() method.
+    """
+    def __init__(self, tasks_queue, result_queue):
+        super(TPLinkWorker, self).__init__()
+        self.tasks_queue = tasks_queue
+        self.result_queue = result_queue
+        self.stoprequest = threading.Event()
+        self.stopcolovaria = threading.Event()
+
+    def run(self):
+        # As long as we weren't asked to stop, try to take new tasks from the
+        # queue. The tasks are taken with a blocking 'get', so no CPU
+        # cycles are wasted while waiting.
+        # Also, 'get' is given a timeout, so stoprequest is always checked,
+        # even if there's nothing in the queue.
+        while not self.stoprequest.isSet():
+            try:
+                spell = self.tasks_queue.get(True, 0.05)
+
+                self.result_queue.put(spell())
+            except Queue.Empty:
+                continue
+
+    def join(self, timeout=None):
+        self.stoprequest.set()
+        super(TPLinkWorker, self).join(timeout)
+
+    def _lumos(self):
+        tplink.allOn()
+
+    def _nox(self):
+        tplink.allOff()
+
+    def _colovaria(self):
+        l = tplink.TPLink()
+        logging.info(l.login('alexdziena@gmail.com', 'bg0*ls6C)ny1'))
+        factory = DeviceFactory(l.endpoint)
+        devices = defaultdict(list)
+        for device in l.getDeviceList()['result']['deviceList']:
+            logging.info('{}: {}'.format(device['alias'], device['deviceId']))
+            device = factory.buildDevice(device)
+            devices[device.__class__].append(device)
+            device.token = l.token
+            # logging.info(device.on())
+            # time.sleep(.5)
+            # logging.info(device.off())
+        for bulb in devices[Bulb]:
+            logging.info(bulb.on())
+            logging.info(bulb.color())
+            logging.info(bulb.saturation(100))
+            for hue in range(361):
+                if self.stopcolovaria.isSet():
+                    break
+                logging.info(bulb.hue(hue))
+                time.sleep(20 / 1000.0)
+            logging.info(bulb.white())
+        self.stopcolovaria.clear()
+
+TASKS = Queue.Queue(maxsize=10)
+RESULTS = Queue.Queue(maxsize=10)
+WORKER = TPLinkWorker(TASKS, RESULTS)
 def Spell(spell):    
     #clear all checks
     ig = [[0] for x in range(15)] 
     #Invoke IoT (or any other) actions here
     cv2.putText(mask, spell, (5, 25),cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255,0,0))
     if (spell=="Colovaria"):
-        print("trinket_pin trigger")
-        pi.write(trinket_pin,0)
-        time.sleep(1)
-        pi.write(trinket_pin,1)
+        # print("trinket_pin trigger")
+        # pi.write(trinket_pin,0)
+        # time.sleep(1)
+        # pi.write(trinket_pin,1)
+        # threading.Thread(target=tplink.test).start()
+        TASKS.put(WORKER._colovaria,1)
+
     elif (spell=="Incendio"):
-        print("switch_pin OFF")
-        pi.write(switch_pin,0)
-        print("nox_pin OFF")
-        pi.write(nox_pin,0)
-        print("incendio_pin ON")
-        pi.write(incendio_pin,1)
+        # print("switch_pin OFF")
+        # pi.write(switch_pin,0)
+        # print("nox_pin OFF")
+        # pi.write(nox_pin,0)
+        # print("incendio_pin ON")
+        # pi.write(incendio_pin,1)
+        pass
     elif (spell=="Lumos"):
 	# print "switch_pin ON"
 	# pi.write(switch_pin,1)
@@ -106,19 +180,20 @@ def Spell(spell):
 	# pi.write(nox_pin,0)
 	# print "incendio_pin OFF"
 	# pi.write(incendio_pin,0)
-        threading.Thread(target=tplink.test).start()
+        TASKS.put(WORKER._lumos,1)
     elif (spell=="Nox"):
-        print("switch_pin OFF")
-        pi.write(switch_pin,0)
-        print("nox_pin ON")
-        pi.write(nox_pin,1)
-        print("incendio_pin OFF")
-        pi.write(incendio_pin,0)        
-    print("CAST: {}".format(spell))
+        # print("switch_pin OFF")
+        # pi.write(switch_pin,0)
+        # print("nox_pin ON")
+        # pi.write(nox_pin,1)
+        # print("incendio_pin OFF")
+        # pi.write(incendio_pin,0)
+        TASKS.put(WORKER._nox,1)
+    logging.info("CAST: {}".format(spell))
     
 
 def IsGesture(a,b,c,d,i):
-    print("point: {}".format(i))
+    logging.debug("point: {}".format(i))
     #look for basic movements - TODO: trained gestures
     if ((a<(c-5))&(abs(b-d)<2)):
         ig[i].append("left")
@@ -138,7 +213,7 @@ def IsGesture(a,b,c,d,i):
         Spell("Colovaria")
     elif "leftup" in astr:
         Spell("Incendio")    
-    print(astr)
+    logging.info(astr)
     
 def FindWand():
     global rval,old_frame,old_gray,p0,mask,color,ig,img,frame
@@ -159,11 +234,12 @@ def FindWand():
             p0 = p0[:,:,0:2] 
             mask = np.zeros_like(old_frame)
             ig = [[0] for x in range(20)]
-        print("finding...")
+        logging.info("finding...")
         threading.Timer(3, FindWand).start()
     except:
         e = sys.exc_info()[1]
-        print("Error: {}".format(e))
+        logging.error("Error: {}".format(e))
+        WORKER.join()
         exit
         
 def TrackWand():
@@ -187,7 +263,7 @@ def TrackWand():
                     p0 = p0[:,:,0:2]
                     mask = np.zeros_like(old_frame)
         except:
-                print("No points found")         
+                logging.warning("No points found")
         # Create a mask image for drawing purposes
         
         while True:
@@ -235,22 +311,25 @@ def TrackWand():
                         old_gray = frame_gray.copy()
                         p0 = good_new.reshape(-1,1,2)
                 except IndexError:
-                            print("Index error - Tracking")  
+                            logging.warning("Index error - Tracking")
                 except:
                             e = sys.exc_info()[0]
-                            print("Tracking Error: {}".format(e)) 
+                            logging.error("Tracking Error: {}".format(e))
                 key = cv2.waitKey(20)
                 if key in [27, ord('Q'), ord('q')]: # exit on ESC
-                        cv2.destroyAllWindows()
-                        cam.release()  
-                        break           
+                    WORKER.join()
+                    cv2.destroyAllWindows()
+                    cam.release()
+                    break
 
 try:
     FindWand()
-    print("START incendio_pin ON and set switch off if video is running")
+    logging.info("START incendio_pin ON and set switch off if video is running")
     pi.write(incendio_pin,1)
     pi.write(switch_pin,0)      
-    TrackWand()  
-finally:   
+    TrackWand()
+    WORKER.start()
+finally:
+    WORKER.join()
     cv2.destroyAllWindows()
     cam.release()  
