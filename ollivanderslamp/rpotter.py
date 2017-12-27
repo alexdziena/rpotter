@@ -29,6 +29,7 @@ import math
 import time
 import pigpio
 import warnings
+import tplink
 
 warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
@@ -95,12 +96,13 @@ def Spell(spell):
 	print "incendio_pin ON"
 	pi.write(incendio_pin,1)
     elif (spell=="Lumos"):
-	print "switch_pin ON"
-	pi.write(switch_pin,1)
-	print "nox_pin OFF"
-	pi.write(nox_pin,0)
-	print "incendio_pin OFF"
-	pi.write(incendio_pin,0)	
+	# print "switch_pin ON"
+	# pi.write(switch_pin,1)
+	# print "nox_pin OFF"
+	# pi.write(nox_pin,0)
+	# print "incendio_pin OFF"
+	# pi.write(incendio_pin,0)
+    tplink.test()
     elif (spell=="Nox"):
 	print "switch_pin OFF"
 	pi.write(switch_pin,0)

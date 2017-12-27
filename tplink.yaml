@@ -1,0 +1,21 @@
+tplink:
+  endpoint: https://wap.tplinkcloud.com
+  uuid: 59c7a76a-77cd-45eb-a0f6-484da6b6fe86
+#{
+# "method": "login",
+# "params": {
+# "appType": "Kasa_Android",
+# "cloudUserName": "XXXXX",
+# "cloudPassword": "XXXXX",
+# "terminalUUID": "MY_UUID_v4"
+# }
+#}
+#
+#{
+# "error_code": 0,
+# "result": {
+# "regTime": "2017-01-06 08:42:35",
+# "email": "XXXXX",
+# "token": "YOUR_TOKEN_HERE"
+# }
+#}
