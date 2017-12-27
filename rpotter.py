@@ -81,6 +81,7 @@ cam = cv2.VideoCapture(-1)
 cam.set(3, 640)
 cam.set(4, 480)
 
+
 class TPLinkWorker(threading.Thread):
     """ A worker thread that takes directory names from a queue, finds all
         files in them recursively and reports the result.
@@ -93,6 +94,7 @@ class TPLinkWorker(threading.Thread):
 
         Ask the thread to stop by calling its join() method.
     """
+
     def __init__(self, tasks_queue, result_queue):
         super(TPLinkWorker, self).__init__()
         self.tasks_queue = tasks_queue
@@ -106,6 +108,7 @@ class TPLinkWorker(threading.Thread):
         # cycles are wasted while waiting.
         # Also, 'get' is given a timeout, so stoprequest is always checked,
         # even if there's nothing in the queue.
+        logging.info("Starting Worker")
         while not self.stoprequest.isSet():
             try:
                 spell = self.tasks_queue.get(True, 0.05)
@@ -125,6 +128,7 @@ class TPLinkWorker(threading.Thread):
         tplink.allOff()
 
     def _colovaria(self):
+        self.stopcolovaria.clear()
         l = tplink.TPLink()
         logging.info(l.login('alexdziena@gmail.com', 'bg0*ls6C)ny1'))
         factory = DeviceFactory(l.endpoint)
@@ -147,23 +151,27 @@ class TPLinkWorker(threading.Thread):
                 logging.info(bulb.hue(hue))
                 time.sleep(20 / 1000.0)
             logging.info(bulb.white())
+            if self.stopcolovaria.isSet():
+                break
         self.stopcolovaria.clear()
+
 
 TASKS = Queue.Queue(maxsize=10)
 RESULTS = Queue.Queue(maxsize=10)
 WORKER = TPLinkWorker(TASKS, RESULTS)
-def Spell(spell):    
-    #clear all checks
-    ig = [[0] for x in range(15)] 
-    #Invoke IoT (or any other) actions here
-    cv2.putText(mask, spell, (5, 25),cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255,0,0))
-    if (spell=="Colovaria"):
+
+def Spell(spell):
+    # clear all checks
+    ig = [[0] for x in range(15)]
+    # Invoke IoT (or any other) actions here
+    cv2.putText(mask, spell, (5, 25), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0))
+    if (spell == "Colovaria"):
         # print("trinket_pin trigger")
         # pi.write(trinket_pin,0)
         # time.sleep(1)
         # pi.write(trinket_pin,1)
         # threading.Thread(target=tplink.test).start()
-        TASKS.put(WORKER._colovaria,1)
+        TASKS.put(WORKER._colovaria, 1)
 
     elif (spell=="Incendio"):
         # print("switch_pin OFF")
@@ -173,65 +181,70 @@ def Spell(spell):
         # print("incendio_pin ON")
         # pi.write(incendio_pin,1)
         pass
-    elif (spell=="Lumos"):
-	# print "switch_pin ON"
-	# pi.write(switch_pin,1)
-	# print "nox_pin OFF"
-	# pi.write(nox_pin,0)
-	# print "incendio_pin OFF"
-	# pi.write(incendio_pin,0)
-        TASKS.put(WORKER._lumos,1)
-    elif (spell=="Nox"):
+    elif (spell == "Lumos"):
+        # print "switch_pin ON"
+        # pi.write(switch_pin,1)
+        # print "nox_pin OFF"
+        # pi.write(nox_pin,0)
+        # print "incendio_pin OFF"
+        # pi.write(incendio_pin,0)
+        WORKER.stopcolovaria.set()
+        TASKS.put(WORKER._lumos, 1)
+    elif (spell == "Nox"):
         # print("switch_pin OFF")
         # pi.write(switch_pin,0)
         # print("nox_pin ON")
         # pi.write(nox_pin,1)
         # print("incendio_pin OFF")
         # pi.write(incendio_pin,0)
-        TASKS.put(WORKER._nox,1)
+        WORKER.stopcolovaria.set()
+        TASKS.put(WORKER._nox, 1)
     logging.info("CAST: {}".format(spell))
-    
+    return True
 
-def IsGesture(a,b,c,d,i):
+
+def IsGesture(a, b, c, d, i):
     logging.debug("point: {}".format(i))
-    #look for basic movements - TODO: trained gestures
-    if ((a<(c-5))&(abs(b-d)<2)):
+    # look for basic movements - TODO: trained gestures
+    if ((a < (c - 5)) & (abs(b - d) < 2)):
         ig[i].append("left")
-    elif ((c<(a-5))&(abs(b-d)<2)):
+    elif ((c < (a - 5)) & (abs(b - d) < 2)):
         ig[i].append("right")
-    elif ((b<(d-5))&(abs(a-c)<5)):
+    elif ((b < (d - 5)) & (abs(a - c) < 5)):
         ig[i].append("up")
-    elif ((d<(b-5))&(abs(a-c)<5)):
+    elif ((d < (b - 5)) & (abs(a - c) < 5)):
         ig[i].append("down")
-    #check for gesture patterns in array
+    # check for gesture patterns in array
     astr = ''.join(map(str, ig[i]))
+    logging.debug(astr)
     if "rightup" in astr:
-        Spell("Lumos")
+        return Spell("Lumos")
     elif "rightdown" in astr:
-        Spell("Nox")
-    elif "leftdown" in astr:
-        Spell("Colovaria")
-    elif "leftup" in astr:
-        Spell("Incendio")    
-    logging.info(astr)
-    
+        return Spell("Nox")
+    elif "leftdownright" in astr:
+        return Spell("Colovaria")
+    # elif "leftup" in astr:
+    #     return Spell("Incendio")
+    return False
+
+
 def FindWand():
-    global rval,old_frame,old_gray,p0,mask,color,ig,img,frame
+    global rval, old_frame, old_gray, p0, mask, color, ig, img, frame
     try:
         rval, old_frame = cam.read()
-        cv2.flip(old_frame,1,old_frame)
-        old_gray = cv2.cvtColor(old_frame,cv2.COLOR_BGR2GRAY)
+        cv2.flip(old_frame, 1, old_frame)
+        old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
         equalizeHist(old_gray)
-        old_gray = GaussianBlur(old_gray,(9,9),1.5)
+        old_gray = GaussianBlur(old_gray, (9, 9), 1.5)
         dilate_kernel = np.ones(dilation_params, np.uint8)
         old_gray = cv2.dilate(old_gray, dilate_kernel, iterations=1)
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         old_gray = clahe.apply(old_gray)
-        #TODO: trained image recognition
-        p0 = cv2.HoughCircles(old_gray,cv2.HOUGH_GRADIENT,3,50,param1=240,param2=8,minRadius=4,maxRadius=15)
+        # TODO: trained image recognition
+        p0 = cv2.HoughCircles(old_gray, cv2.HOUGH_GRADIENT, 3, 50, param1=240, param2=8, minRadius=4, maxRadius=15)
         if p0 is not None:
             p0.shape = (p0.shape[1], 1, p0.shape[2])
-            p0 = p0[:,:,0:2] 
+            p0 = p0[:, :, 0:2]
             mask = np.zeros_like(old_frame)
             ig = [[0] for x in range(20)]
         logging.info("finding...")
@@ -240,96 +253,99 @@ def FindWand():
         e = sys.exc_info()[1]
         logging.error("Error: {}".format(e))
         WORKER.join()
-        exit
-        
+        exit()
+
+
 def TrackWand():
-        global rval,old_frame,old_gray,p0,mask,color,ig,img,frame
+    global rval, old_frame, old_gray, p0, mask, color, ig, img, frame
+    try:
+        color = (0, 0, 255)
+        rval, old_frame = cam.read()
+        cv2.flip(old_frame, 1, old_frame)
+        old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
+        equalizeHist(old_gray)
+        old_gray = GaussianBlur(old_gray, (9, 9), 1.5)
+        dilate_kernel = np.ones(dilation_params, np.uint8)
+        old_gray = cv2.dilate(old_gray, dilate_kernel, iterations=1)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        old_gray = clahe.apply(old_gray)
+
+        # Take first frame and find circles in it
+        p0 = cv2.HoughCircles(old_gray, cv2.HOUGH_GRADIENT, 3, 50, param1=240, param2=8, minRadius=4, maxRadius=15)
+        if p0 is not None:
+            p0.shape = (p0.shape[1], 1, p0.shape[2])
+            p0 = p0[:, :, 0:2]
+            mask = np.zeros_like(old_frame)
+    except:
+        logging.warning("No points found")
+    # Create a mask image for drawing purposes
+
+    while True:
         try:
-                color = (0,0,255)
-                rval, old_frame = cam.read()
-                cv2.flip(old_frame,1,old_frame)
-                old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
-                equalizeHist(old_gray)
-                old_gray = GaussianBlur(old_gray,(9,9),1.5)
+            rval, frame = cam.read()
+            cv2.flip(frame, 1, frame)
+            if p0 is not None:
+                frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                equalizeHist(frame_gray)
+                frame_gray = GaussianBlur(frame_gray, (9, 9), 1.5)
                 dilate_kernel = np.ones(dilation_params, np.uint8)
-                old_gray = cv2.dilate(old_gray, dilate_kernel, iterations=1)
-                clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
-                old_gray = clahe.apply(old_gray)
+                frame_gray = cv2.dilate(frame_gray, dilate_kernel, iterations=1)
+                frame_clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+                frame_gray = frame_clahe.apply(frame_gray)
 
-                # Take first frame and find circles in it
-                p0 = cv2.HoughCircles(old_gray,cv2.HOUGH_GRADIENT,3,50,param1=240,param2=8,minRadius=4,maxRadius=15)
-                if p0 is not None:
-                    p0.shape = (p0.shape[1], 1, p0.shape[2])
-                    p0 = p0[:,:,0:2]
-                    mask = np.zeros_like(old_frame)
+                # calculate optical flow
+                p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, None, **lk_params)
+
+                # Select good points
+                good_new = p1[st == 1]
+                good_old = p0[st == 1]
+
+                # draw the tracks
+                for i, (new, old) in enumerate(zip(good_new, good_old)):
+                    a, b = new.ravel()
+                    c, d = old.ravel()
+                    # only try to detect gesture on highly-rated points (below 10)
+                    if (i < 15):
+                        if IsGesture(a, b, c, d, i): time.sleep(3.1)
+                    dist = math.hypot(a - c, b - d)
+                    if (dist < movment_threshold):
+                        cv2.line(mask, (a, b), (c, d), (0, 255, 0), 2)
+                    cv2.circle(frame, (a, b), 5, color, -1)
+                    cv2.putText(frame, str(i), (a, b), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255))
+                img = cv2.add(frame, mask)
+
+                cv2.putText(img, "Press ESC to close.", (5, 25),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255))
+            cv2.imshow("Raspberry Potter", frame)
+
+            # get next frame
+            rval, frame = cam.read()
+
+            # Now update the previous frame and previous points
+            old_gray = frame_gray.copy()
+            p0 = good_new.reshape(-1, 1, 2)
+        except IndexError:
+            logging.warning("Index error - Tracking")
         except:
-                logging.warning("No points found")
-        # Create a mask image for drawing purposes
-        
-        while True:
-                try: 
-                        rval, frame = cam.read()
-                        cv2.flip(frame,1,frame)
-                        if p0 is not None:
-                            frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                            equalizeHist(frame_gray)
-                            frame_gray = GaussianBlur(frame_gray,(9,9),1.5)
-                            dilate_kernel = np.ones(dilation_params, np.uint8)
-                            frame_gray = cv2.dilate(frame_gray, dilate_kernel, iterations=1)    
-                            frame_clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
-                            frame_gray = frame_clahe.apply(frame_gray)
+            e = sys.exc_info()[0]
+            logging.error("Tracking Error: {}".format(e))
+        key = cv2.waitKey(20)
+        if key in [27, ord('Q'), ord('q')]:  # exit on ESC
+            WORKER.join()
+            cv2.destroyAllWindows()
+            cam.release()
+            break
 
-                        # calculate optical flow
-                            p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, None, **lk_params)
-
-                        # Select good points
-                            good_new = p1[st==1]
-                            good_old = p0[st==1]
-
-                            # draw the tracks
-                            for i,(new,old) in enumerate(zip(good_new,good_old)):
-                                    a,b = new.ravel()
-                                    c,d = old.ravel()
-                                    # only try to detect gesture on highly-rated points (below 10)
-                                    if (i<15):
-                                            IsGesture(a,b,c,d,i)
-                                    dist = math.hypot(a - c, b - d)
-                                    if (dist<movment_threshold):
-                                            cv2.line(mask, (a,b),(c,d),(0,255,0), 2)
-                                    cv2.circle(frame,(a,b),5,color,-1)
-                                    cv2.putText(frame, str(i), (a,b), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,0,255)) 
-                            img = cv2.add(frame,mask)
-
-                            cv2.putText(img, "Press ESC to close.", (5, 25),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255,255,255))
-                        cv2.imshow("Raspberry Potter", frame)
-
-                        # get next frame
-                        rval, frame = cam.read()
-
-                        # Now update the previous frame and previous points
-                        old_gray = frame_gray.copy()
-                        p0 = good_new.reshape(-1,1,2)
-                except IndexError:
-                            logging.warning("Index error - Tracking")
-                except:
-                            e = sys.exc_info()[0]
-                            logging.error("Tracking Error: {}".format(e))
-                key = cv2.waitKey(20)
-                if key in [27, ord('Q'), ord('q')]: # exit on ESC
-                    WORKER.join()
-                    cv2.destroyAllWindows()
-                    cam.release()
-                    break
 
 try:
+    WORKER.start()
     FindWand()
     logging.info("START incendio_pin ON and set switch off if video is running")
     pi.write(incendio_pin,1)
     pi.write(switch_pin,0)      
     TrackWand()
-    WORKER.start()
+
 finally:
-    WORKER.join()
+    if WORKER.isAlive(): WORKER.join()
     cv2.destroyAllWindows()
-    cam.release()  
+    cam.release()

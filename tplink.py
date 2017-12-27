@@ -7,7 +7,7 @@ from device import DeviceFactory, Bulb, Plug
 from collections import defaultdict
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 
 _APP_TYPE = "Kasa_Android"
 _METHODS = {
@@ -93,7 +93,7 @@ def allOff():
     logging.info(l.login('alexdziena@gmail.com','bg0*ls6C)ny1'))
     factory = DeviceFactory(l.endpoint)
     for device in l.getDeviceList()['result']['deviceList']:
-        device = factory.buildDevice(device).token
+        device = factory.buildDevice(device)
         device.token = l.token
         device.off()
 
@@ -102,7 +102,7 @@ def allOn():
     logging.info(l.login('alexdziena@gmail.com','bg0*ls6C)ny1'))
     factory = DeviceFactory(l.endpoint)
     for device in l.getDeviceList()['result']['deviceList']:
-        device = factory.buildDevice(device).token
+        device = factory.buildDevice(device)
         device.token = l.token
         device.on()
 
