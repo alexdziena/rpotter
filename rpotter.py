@@ -30,11 +30,14 @@ import time
 import pigpio
 import warnings
 import tplink
-import Queue
+is_py2 = sys.version[0] == '2'
+if is_py2: import Queue as queue
+else: import queue as queue
 from device import DeviceFactory, Bulb
 from collections import defaultdict
 import logging
 
+logging.basicConfig(level=logging.INFO)
 warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
 GPIOS=32
@@ -114,7 +117,7 @@ class TPLinkWorker(threading.Thread):
                 spell = self.tasks_queue.get(True, 0.05)
 
                 self.result_queue.put(spell())
-            except Queue.Empty:
+            except queue.Empty:
                 continue
 
     def join(self, timeout=None):
@@ -156,8 +159,8 @@ class TPLinkWorker(threading.Thread):
         self.stopcolovaria.clear()
 
 
-TASKS = Queue.Queue(maxsize=10)
-RESULTS = Queue.Queue(maxsize=10)
+TASKS = queue.Queue(maxsize=10)
+RESULTS = queue.Queue(maxsize=10)
 WORKER = TPLinkWorker(TASKS, RESULTS)
 
 def Spell(spell):
@@ -221,7 +224,7 @@ def IsGesture(a, b, c, d, i):
         return Spell("Lumos")
     elif "rightdown" in astr:
         return Spell("Nox")
-    elif "leftdownright" in astr:
+    elif "leftdown" in astr:
         return Spell("Colovaria")
     # elif "leftup" in astr:
     #     return Spell("Incendio")
