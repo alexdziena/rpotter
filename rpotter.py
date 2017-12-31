@@ -114,9 +114,10 @@ class TPLinkWorker(threading.Thread):
         logging.info("Starting Worker")
         while not self.stoprequest.isSet():
             try:
-                spell = self.tasks_queue.get(True, 0.05)
-
+                spell = self.tasks_queue.get(True, 3)
+                logging.info(self.result_queue.get())
                 self.result_queue.put(spell())
+                self.tasks_queue.task_done()
             except queue.Empty:
                 continue
 
@@ -160,14 +161,23 @@ class TPLinkWorker(threading.Thread):
 
 
 TASKS = queue.Queue(maxsize=10)
-RESULTS = queue.Queue(maxsize=10)
-WORKER = TPLinkWorker(TASKS, RESULTS)
+RESULTS = queue.Queue(maxsize=20)
+WORKER = None
+
+
+def startWorker():
+    global WORKER
+    WORKER = TPLinkWorker(TASKS,RESULTS)
+    WORKER.start()
+
 
 def Spell(spell):
     # clear all checks
     ig = [[0] for x in range(15)]
     # Invoke IoT (or any other) actions here
     cv2.putText(mask, spell, (5, 25), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0))
+    if not WORKER or not WORKER.isAlive():
+        startWorker()
     if (spell == "Colovaria"):
         # print("trinket_pin trigger")
         # pi.write(trinket_pin,0)
@@ -202,6 +212,9 @@ def Spell(spell):
         # pi.write(incendio_pin,0)
         WORKER.stopcolovaria.set()
         TASKS.put(WORKER._nox, 1)
+    else:
+        logging.error("Spell not found: {}".format(spell))
+        return False
     logging.info("CAST: {}".format(spell))
     return True
 
@@ -341,7 +354,7 @@ def TrackWand():
 
 
 try:
-    WORKER.start()
+    startWorker()
     FindWand()
     logging.info("START incendio_pin ON and set switch off if video is running")
     pi.write(incendio_pin,1)
