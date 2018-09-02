@@ -22,12 +22,10 @@ import numpy as np
 import argparse
 import cv2
 from cv2 import *
-import picamera
 import threading
 import sys
 import math
 import time
-import pigpio
 import warnings
 import tplink
 import Queue
@@ -35,30 +33,11 @@ from device import DeviceFactory, Bulb
 from collections import defaultdict
 import logging
 
+logging.basicConfig(level=logging.INFO)
+
 warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
-GPIOS=32
-MODES=["INPUT", "OUTPUT", "ALT5", "ALT4", "ALT0", "ALT1", "ALT2", "ALT3"]
-
-pi = pigpio.pi()
-
 #NOTE pins use BCM numbering in code.  I reference BOARD numbers in my articles - sorry for the confusion!
-
-#pin for Powerswitch (Lumos,Nox)
-switch_pin = 23
-pi.set_mode(switch_pin,pigpio.OUTPUT)
-
-#pin for Particle (Nox)
-nox_pin = 24
-pi.set_mode(nox_pin,pigpio.OUTPUT)
-
-#pin for Particle (Incendio)
-incendio_pin = 22
-pi.set_mode(incendio_pin,pigpio.OUTPUT)
-
-#pin for Trinket (Colovario)
-trinket_pin = 12
-pi.set_mode(trinket_pin,pigpio.OUTPUT)
 
 logging.info("Initializing point tracking")
 
@@ -71,18 +50,21 @@ dilation_params = (5, 5)
 movment_threshold = 80
 
 logging.info("START switch_pin ON for pre-video test")
-pi.write(nox_pin,0)
-pi.write(incendio_pin,0)
-pi.write(switch_pin,1)
 
 # start capturing
 cv2.namedWindow("Raspberry Potter")
-cam = cv2.VideoCapture(-1)
-cam.set(3, 640)
-cam.set(4, 480)
+try:
+    import picamera
+    CAM_NUMBER = -1
+except:
+    CAM_NUMBER = 0
+cam = cv2.VideoCapture(CAM_NUMBER)
+cam.set(3, 1024)
+cam.set(4, 768)
 
 
 class TPLinkWorker(threading.Thread):
+    # Based on https://eli.thegreenplace.net/2011/12/27/python-threads-communication-and-stopping
     """ A worker thread that takes directory names from a queue, finds all
         files in them recursively and reports the result.
 
@@ -122,15 +104,18 @@ class TPLinkWorker(threading.Thread):
         super(TPLinkWorker, self).join(timeout)
 
     def _lumos(self):
+        logging.info("Lumos called")
         tplink.allOn()
 
     def _nox(self):
+        logging.info("Nox called")
         tplink.allOff()
 
     def _colovaria(self):
+        logging.info("Colovaria called")
         self.stopcolovaria.clear()
         l = tplink.TPLink()
-        logging.info(l.login('alexdziena@gmail.com', 'bg0*ls6C)ny1'))
+        logging.info(l.login())
         factory = DeviceFactory(l.endpoint)
         devices = defaultdict(list)
         for device in l.getDeviceList()['result']['deviceList']:
@@ -166,37 +151,11 @@ def Spell(spell):
     # Invoke IoT (or any other) actions here
     cv2.putText(mask, spell, (5, 25), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0))
     if (spell == "Colovaria"):
-        # print("trinket_pin trigger")
-        # pi.write(trinket_pin,0)
-        # time.sleep(1)
-        # pi.write(trinket_pin,1)
-        # threading.Thread(target=tplink.test).start()
         TASKS.put(WORKER._colovaria, 1)
-
-    elif (spell=="Incendio"):
-        # print("switch_pin OFF")
-        # pi.write(switch_pin,0)
-        # print("nox_pin OFF")
-        # pi.write(nox_pin,0)
-        # print("incendio_pin ON")
-        # pi.write(incendio_pin,1)
-        pass
     elif (spell == "Lumos"):
-        # print "switch_pin ON"
-        # pi.write(switch_pin,1)
-        # print "nox_pin OFF"
-        # pi.write(nox_pin,0)
-        # print "incendio_pin OFF"
-        # pi.write(incendio_pin,0)
         WORKER.stopcolovaria.set()
         TASKS.put(WORKER._lumos, 1)
     elif (spell == "Nox"):
-        # print("switch_pin OFF")
-        # pi.write(switch_pin,0)
-        # print("nox_pin ON")
-        # pi.write(nox_pin,1)
-        # print("incendio_pin OFF")
-        # pi.write(incendio_pin,0)
         WORKER.stopcolovaria.set()
         TASKS.put(WORKER._nox, 1)
     logging.info("CAST: {}".format(spell))
@@ -221,7 +180,7 @@ def IsGesture(a, b, c, d, i):
         return Spell("Lumos")
     elif "rightdown" in astr:
         return Spell("Nox")
-    elif "leftdownright" in astr:
+    elif "leftdown" in astr:
         return Spell("Colovaria")
     # elif "leftup" in astr:
     #     return Spell("Incendio")
@@ -305,8 +264,9 @@ def TrackWand():
                     a, b = new.ravel()
                     c, d = old.ravel()
                     # only try to detect gesture on highly-rated points (below 10)
-                    if (i < 15):
-                        if IsGesture(a, b, c, d, i): time.sleep(3.1)
+                    if (i < 3):
+                        gesture = IsGesture(a, b, c, d, i)
+                        if gesture: time.sleep(3.1)
                     dist = math.hypot(a - c, b - d)
                     if (dist < movment_threshold):
                         cv2.line(mask, (a, b), (c, d), (0, 255, 0), 2)
@@ -341,8 +301,6 @@ try:
     WORKER.start()
     FindWand()
     logging.info("START incendio_pin ON and set switch off if video is running")
-    pi.write(incendio_pin,1)
-    pi.write(switch_pin,0)      
     TrackWand()
 
 finally:

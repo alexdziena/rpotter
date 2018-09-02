@@ -9,7 +9,6 @@ import logging
 
 # logging.basicConfig(level=logging.DEBUG)
 
-_APP_TYPE = "Kasa_Android"
 _METHODS = {
     'login': 'login',
     'getDeviceList': 'getDeviceList'
@@ -44,17 +43,17 @@ class TPLink(object):
 
     def __init__(self, endpoint=None, uuid=None):
         self.endpoint = endpoint or self.config['tplink']['endpoint']
-        self.uuid = uuid or self.config['tplink']['uuid']
+        self.uuid = uuid or self.config['tplink']['clientDeviceUuid']
         self.methods = _METHODS
 
-    def login(self, username, password, uuid=None):
+    def login(self, username=None, password=None, uuid=None):
         uuid = uuid or self.uuid
         data = {
             "method": self.methods.get('login'),
             "params": {
-                "appType": _APP_TYPE,
-                "cloudUserName": username,
-                "cloudPassword": password,
+                "appType": self.config['tplink']['appType'],
+                "cloudUserName": self.config['tplink']['username'],
+                "cloudPassword": self.config['tplink']['password'],
                 "terminalUUID": uuid
             }
         }
