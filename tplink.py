@@ -52,8 +52,8 @@ class TPLink(object):
             "method": self.methods.get('login'),
             "params": {
                 "appType": self.config['tplink']['appType'],
-                "cloudUserName": self.config['tplink']['username'],
-                "cloudPassword": self.config['tplink']['password'],
+                "cloudUserName": username or self.config['tplink']['username'],
+                "cloudPassword": password or self.config['tplink']['password'],
                 "terminalUUID": uuid
             }
         }
@@ -89,7 +89,7 @@ class TPLink(object):
 
 def allOff():
     l = TPLink()
-    logging.info(l.login('alexdziena@gmail.com','bg0*ls6C)ny1'))
+    logging.info(l.login())
     factory = DeviceFactory(l.endpoint)
     for device in l.getDeviceList()['result']['deviceList']:
         device = factory.buildDevice(device)
@@ -98,7 +98,7 @@ def allOff():
 
 def allOn():
     l = TPLink()
-    logging.info(l.login('alexdziena@gmail.com','bg0*ls6C)ny1'))
+    logging.info(l.login())
     factory = DeviceFactory(l.endpoint)
     for device in l.getDeviceList()['result']['deviceList']:
         device = factory.buildDevice(device)
@@ -107,7 +107,7 @@ def allOn():
 
 def test():
     l = TPLink()
-    logging.info(l.login('alexdziena@gmail.com','bg0*ls6C)ny1'))
+    logging.info(l.login())
     factory = DeviceFactory(l.endpoint)
     devices = defaultdict(list)
     for device in l.getDeviceList()['result']['deviceList']:

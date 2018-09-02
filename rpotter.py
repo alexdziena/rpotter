@@ -26,18 +26,50 @@ import threading
 import sys
 import math
 import time
+
 import warnings
 import tplink
-import Queue
+is_py2 = sys.version[0] == '2'
+if is_py2: import Queue as queue
+else: import queue as queue
 from device import DeviceFactory, Bulb
 from collections import defaultdict
 import logging
 
 logging.basicConfig(level=logging.INFO)
-
 warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
-#NOTE pins use BCM numbering in code.  I reference BOARD numbers in my articles - sorry for the confusion!
+_SUPPORTS_PI_LIBS = False
+
+try:
+    import pigpio
+    import picamera
+    _SUPPORTS_PI_LIBS = True
+except:
+    print "Can not import Raspberry Pi Libraries"
+if _SUPPORTS_PI_LIBS:
+    GPIOS=32
+    MODES=["INPUT", "OUTPUT", "ALT5", "ALT4", "ALT0", "ALT1", "ALT2", "ALT3"]
+
+    pi = pigpio.pi()
+
+    #NOTE pins use BCM numbering in code.  I reference BOARD numbers in my articles - sorry for the confusion!
+
+    #pin for Powerswitch (Lumos,Nox)
+    switch_pin = 23
+    pi.set_mode(switch_pin,pigpio.OUTPUT)
+
+    #pin for Particle (Nox)
+    nox_pin = 24
+    pi.set_mode(nox_pin,pigpio.OUTPUT)
+
+    #pin for Particle (Incendio)
+    incendio_pin = 22
+    pi.set_mode(incendio_pin,pigpio.OUTPUT)
+
+    #pin for Trinket (Colovario)
+    trinket_pin = 12
+    pi.set_mode(trinket_pin,pigpio.OUTPUT)
 
 logging.info("Initializing point tracking")
 
@@ -50,17 +82,24 @@ dilation_params = (5, 5)
 movment_threshold = 80
 
 logging.info("START switch_pin ON for pre-video test")
+if _SUPPORTS_PI_LIBS:
+    pi.write(nox_pin,0)
+    pi.write(incendio_pin,0)
+    pi.write(switch_pin,1)
 
 # start capturing
 cv2.namedWindow("Raspberry Potter")
-try:
-    import picamera
+if _SUPPORTS_PI_LIBS:
     CAM_NUMBER = -1
-except:
+else:
     CAM_NUMBER = 0
 cam = cv2.VideoCapture(CAM_NUMBER)
-cam.set(3, 1024)
-cam.set(4, 768)
+if _SUPPORTS_PI_LIBS:
+    cam.set(3, 640)
+    cam.set(4, 480)
+else:
+    cam.set(3, 1024)
+    cam.set(4, 768)
 
 
 class TPLinkWorker(threading.Thread):
@@ -93,10 +132,11 @@ class TPLinkWorker(threading.Thread):
         logging.info("Starting Worker")
         while not self.stoprequest.isSet():
             try:
-                spell = self.tasks_queue.get(True, 0.05)
-
+                spell = self.tasks_queue.get(True, 3)
                 self.result_queue.put(spell())
-            except Queue.Empty:
+                self.tasks_queue.task_done()
+                logging.info(self.result_queue.get(True,3))
+            except queue.Empty:
                 continue
 
     def join(self, timeout=None):
@@ -141,23 +181,35 @@ class TPLinkWorker(threading.Thread):
         self.stopcolovaria.clear()
 
 
-TASKS = Queue.Queue(maxsize=10)
-RESULTS = Queue.Queue(maxsize=10)
-WORKER = TPLinkWorker(TASKS, RESULTS)
+TASKS = queue.Queue(maxsize=10)
+RESULTS = queue.Queue(maxsize=20)
+WORKER = None
+
+
+def startWorker():
+    global WORKER
+    WORKER = TPLinkWorker(TASKS,RESULTS)
+    WORKER.start()
+
 
 def Spell(spell):
     # clear all checks
     ig = [[0] for x in range(15)]
     # Invoke IoT (or any other) actions here
     cv2.putText(mask, spell, (5, 25), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0))
+    if not WORKER or not WORKER.isAlive():
+        startWorker()
     if (spell == "Colovaria"):
-        TASKS.put(WORKER._colovaria, 1)
+        TASKS.put(WORKER._colovaria, True, 1)
     elif (spell == "Lumos"):
         WORKER.stopcolovaria.set()
-        TASKS.put(WORKER._lumos, 1)
+        TASKS.put(WORKER._lumos, True, 1)
     elif (spell == "Nox"):
         WORKER.stopcolovaria.set()
-        TASKS.put(WORKER._nox, 1)
+        TASKS.put(WORKER._nox, True, 1)
+    else:
+        logging.error("Spell not found: {}".format(spell))
+        return False
     logging.info("CAST: {}".format(spell))
     return True
 
@@ -264,9 +316,8 @@ def TrackWand():
                     a, b = new.ravel()
                     c, d = old.ravel()
                     # only try to detect gesture on highly-rated points (below 10)
-                    if (i < 3):
-                        gesture = IsGesture(a, b, c, d, i)
-                        if gesture: time.sleep(3.1)
+                    if (i < 10):
+                        if IsGesture(a, b, c, d, i): time.sleep(3.1)
                     dist = math.hypot(a - c, b - d)
                     if (dist < movment_threshold):
                         cv2.line(mask, (a, b), (c, d), (0, 255, 0), 2)
@@ -286,24 +337,32 @@ def TrackWand():
             p0 = good_new.reshape(-1, 1, 2)
         except IndexError:
             logging.warning("Index error - Tracking")
+        except KeyboardInterrupt:
+            cleanupAll()
+            exit(0)
         except:
             e = sys.exc_info()[0]
             logging.error("Tracking Error: {}".format(e))
         key = cv2.waitKey(20)
         if key in [27, ord('Q'), ord('q')]:  # exit on ESC
-            WORKER.join()
-            cv2.destroyAllWindows()
-            cam.release()
+            cleanupAll()
+            exit(0)
             break
 
-
-try:
-    WORKER.start()
-    FindWand()
-    logging.info("START incendio_pin ON and set switch off if video is running")
-    TrackWand()
-
-finally:
+def cleanupAll():
     if WORKER.isAlive(): WORKER.join()
     cv2.destroyAllWindows()
     cam.release()
+
+
+try:
+    startWorker()
+    FindWand()
+    logging.info("START incendio_pin ON and set switch off if video is running")
+    if _SUPPORTS_PI_LIBS:
+        pi.write(incendio_pin,1)
+        pi.write(switch_pin,0)
+    TrackWand()
+
+finally:
+    cleanupAll();
