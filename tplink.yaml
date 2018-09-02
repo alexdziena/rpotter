@@ -1,6 +1,9 @@
 tplink:
   endpoint: https://wap.tplinkcloud.com
-  uuid: 59c7a76a-77cd-45eb-a0f6-484da6b6fe86
+  uuid: # UUID
+  appType: Kasa_Android
+  username: # username
+  password: # password
 #{
 # "method": "login",
 # "params": {
