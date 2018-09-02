@@ -263,7 +263,9 @@ def FindWand():
     except:
         e = sys.exc_info()[1]
         logging.error("Error: {}".format(e))
-        WORKER.join()
+        if WORKER.isAlive():
+            WORKER.stoprequest.set()
+            WORKER.join()
         exit()
 
 
@@ -350,7 +352,9 @@ def TrackWand():
             break
 
 def cleanupAll():
-    if WORKER.isAlive(): WORKER.join()
+    if WORKER.isAlive():
+        WORKER.stoprequest.set()
+        WORKER.join()
     cv2.destroyAllWindows()
     cam.release()
 

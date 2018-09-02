@@ -43,7 +43,7 @@ class TPLink(object):
 
     def __init__(self, endpoint=None, uuid=None):
         self.endpoint = endpoint or self.config['tplink']['endpoint']
-        self.uuid = uuid or self.config['tplink']['clientDeviceUuid']
+        self.uuid = uuid or self.config['tplink']['uuid']
         self.methods = _METHODS
 
     def login(self, username=None, password=None, uuid=None):
